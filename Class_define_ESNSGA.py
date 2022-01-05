@@ -65,24 +65,46 @@ class myProblem(Problem):
                         break
             operation_index +=1
         return individual
+    def generate_individual_2(self):
+        individual = myIndividual()
+        individual.features.append([int(random.uniform(*x)) for x in self.variables_range[0]])
+        tmp = np.array(range(self.variables_range[1]))
+        random.shuffle(tmp)
+        individual.features.append(tmp)
+        individual = self.valid_individual(individual)
+        #print("test")
+        return individual
     def generate_individual(self):
         individual = myIndividual()
         tmp_feature = []
         for i in range(len(self.variables_range[0])):
             threshold = random.random()
-            if self.variables_range[1][i] <2:
+            if self.variables_range[0][i] <2:
                 tmp_feature.append(1)
             else:
                 if threshold >0.5:
                     tmp_feature.append(1)
                 else:
                     tmp_feature.append(2)
-                
-        individual.features.append([int(random.uniform(*x)) for x in self.variables_range[0]])
-        tmp = np.array(range(self.variables_range[1]))
-        random.shuffle(tmp)
-        individual.features.append(tmp)
-        individual = self.valid_individual(individual)
+        schedule =[]
+        for i in range(len(self.variables_range[0])):
+            if tmp_feature[i]==1:
+                tmp_feature.append(self.variables_range[0][i])
+                for j in range(self.variables_range[1][i]):
+                    schedule.append([i,1])
+            else:
+                batch1 = random.randint(1,self.variables_range[0][i]-1)
+                batch2 = self.variables_range[0][i] - batch1
+                tmp_feature.append(batch1)
+                tmp_feature.append(batch2)
+                for j in range(self.variables_range[1][i]):
+                    schedule.append([i,1])
+                for j in range(self.variables_range[1][i]):
+                    schedule.append([i,2])
+        random.shuffle(schedule)
+        tmp_feature.append(schedule)
+        individual.features.append(tmp_feature)
+        #individual = self.valid_individual(individual)
         #print("test")
         return individual
     
