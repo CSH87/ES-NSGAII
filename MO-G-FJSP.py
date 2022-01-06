@@ -64,6 +64,7 @@ def split_Gene(Gene):
     job_batch = []
     tmp_batch_size = []
     cnt = 0
+    #print(Gene)
     while cnt < len(Gene):
         if cnt==0:
             for i in range(len(job_cnt)): # job_cnt global variable
@@ -151,9 +152,9 @@ def Calculate(Gene):
             
     makespan = max(machine_end_time)
     return makespan, transfer_time, transportation_time, energy
-def maxspan(Gene):
+def makespan(Gene):
     makespan, transfer_time, transportation_time, energy = Calculate(Gene)
-    return maxspan
+    return makespan
 def transfer_time(Gene):
     makespan, transfer_time, transportation_time, energy = Calculate(Gene)
     return transfer_time
@@ -212,21 +213,22 @@ if __name__ == '__main__' :
     operation_num_per_jobs = []
     for i in range(len(job_machine_operation_map)):
         operation_num_per_jobs.append(len(job_machine_operation_map[i])) 
-    inputs = []
-    inputs.append(job_cnt)
-    inputs.append(operation_num_per_jobs)
+    variable = []
+    variable.append(job_cnt)
+    variable.append(operation_num_per_jobs)
+    fittness = [makespan, transfer_time, transportation_time, energy]
     problem = myProblem(num_of_variables=1, 
-                      objectives=inputs, 
-                      variables_range=inputs,
+                      objectives=fittness, 
+                      variables_range=variable,
                       operation_num_per_jobs=operation_num_per_jobs,
                       job_machine_operation_map = job_machine_operation_map)
     individual_1 = problem.generate_individual()
     individual_2 = problem.generate_individual()
-    problem.calculate_objectives(i)
-    problem.calculate_objectives(j)
+    problem.calculate_objectives(individual_1)
+    problem.calculate_objectives(individual_2)
     
     print("Evolutioin......")
-    evo = myEvolution(problem, num_of_generations=1000, num_of_individuals=1000)
+    evo = myEvolution(problem, num_of_generations=200, num_of_individuals=1000)
     evol = evo.evolve()
     func=[]
     feature=[]
@@ -235,11 +237,14 @@ if __name__ == '__main__' :
         feature.append(evol[i].features)
     function1 = [i[0] for i in func]
     function2 = [i[1] for i in func]
-    plt.xlabel('transfer time', fontsize=15)
-    plt.ylabel('maxspan', fontsize=15)
+    function3 = [i[2] for i in func]
+    function4 = [i[3] for i in func]
+    plt.xlabel('maxspan', fontsize=15)
+    plt.ylabel('transfer_time', fontsize=15)
     plt.scatter(function1, function2)
     plt.show()
 
     print("End......")
 #%% testing
     a, b ,c, d = Calculate(individual_1.features[0])
+    test = [f(*individual_1.features) for f in fittness]
