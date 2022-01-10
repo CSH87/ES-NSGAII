@@ -12,6 +12,7 @@ import random
 import numpy as np
 from nsga2.individual import Individual
 from nsga2.population import Population
+import copy
 #%%
 class myIndividual(Individual):
     def __init__(self):
@@ -129,6 +130,7 @@ class myUtils(NSGA2Utils):
                      num_of_tour_particips, tournament_prob, crossover_param, mutation_param)
     def create_children(self, population, num_mutate):
         children = []
+        #print("len : " + str(len(population)))
         child_mutate_set = self.__mutate(population, num_mutate)
         child_reseeding_set = self.__reseeding(population)
         for child_mutate in child_mutate_set:
@@ -138,7 +140,7 @@ class myUtils(NSGA2Utils):
             
         children.extend(child_mutate_set)
         children.extend(child_reseeding_set)
-
+        
         return children
     def fast_nondominated_sort(self, population):
         population.fronts = [[]]
@@ -164,18 +166,22 @@ class myUtils(NSGA2Utils):
                         temp.append(other_individual)
             i = i+1
             population.fronts.append(temp)
-
+        print("poplen : "+str(len(population)))
     def __mutate(self, population, num_mutate):
         half_population = int(len(population)/2)
         front_num = 0
         children = Population()
+        mutate_population = copy.deepcopy(population)
         # select half best individual
         while len(children) < half_population:
-            if len(children)+len(population.fronts[front_num]) <= half_population:
-                children.extend(population.fronts[front_num])
+            if len(children)+len(mutate_population.fronts[front_num]) <= half_population:
+                children.extend(mutate_population.fronts[front_num])
             else:
-                children.extend(population.fronts[front_num][0:half_population-len(children)])
+                children.extend(mutate_population.fronts[front_num][0:half_population-len(children)])
             front_num += 1
+        half_population = int(self.num_of_individuals/2)
+        while len(children) < half_population:
+            children.append(mutate_population.fronts[0][0])
         # mutate half best individual
         for individual in children:
             cnt_mutate = 0
@@ -191,11 +197,10 @@ class myUtils(NSGA2Utils):
                 cnt_mutate+=1
         return children
     def __reseeding(self, population):
-        half_population = int(len(population)/2)
+        half_population = int(self.num_of_individuals/2) # reseed half of initial population 
         children = Population()
         for _ in range(half_population):
             individual = self.problem.generate_individual()
-            self.problem.calculate_objectives(individual)
             children.append(individual)
         return children
     def __tournament(self, population):
@@ -232,7 +237,7 @@ class myUtils(NSGA2Utils):
 #%%
 class myEvolution(Evolution):
 
-    def __init__(self, problem, num_of_generations=1000, num_of_individuals=100, num_of_tour_particips=2, tournament_prob=0.9, crossover_param=2, mutation_param=5,mutation_schedule=[[0,5],[50,3],[100,1]]):
+    def __init__(self, problem, num_of_generations=1000, num_of_individuals=100, num_of_tour_particips=2, tournament_prob=0.9, crossover_param=2, mutation_param=5,mutation_schedule=[[0,20],[50,15],[100,10]]):
         self.population = None
         self.num_of_generations = num_of_generations
         self.on_generation_finished = []
@@ -246,10 +251,11 @@ class myEvolution(Evolution):
             self.utils.calculate_crowding_distance(front)
         num_mutate = self.mutation_schedule[0][1]
         mutate_index = 1
-        children = self.utils.create_children(self.population,num_mutate)
+        
         returned_population = None
         for i in range(self.num_of_generations):
             print('generation : ' + str(i))
+            children = self.utils.create_children(self.population,num_mutate)
             self.population.extend(children)
             self.utils.fast_nondominated_sort(self.population)
             for tmptest in self.population.fronts:
@@ -257,7 +263,7 @@ class myEvolution(Evolution):
             new_population = Population()
             front_num = 0
             # print(self.population.fronts)
-            while len(new_population) + len(self.population.fronts[front_num]) <= self.num_of_individuals and len(self.population.fronts[front_num])!=0:
+            while len(new_population) + len(self.population.fronts[front_num]) <= self.num_of_individuals :
                 self.utils.calculate_crowding_distance(self.population.fronts[front_num])
                 new_population.extend(self.population.fronts[front_num])
                 front_num += 1
@@ -272,5 +278,4 @@ class myEvolution(Evolution):
             if mutate_index < len(self.mutation_schedule) and i == self.mutation_schedule[mutate_index][0]:
                 num_mutate = self.mutation_schedule[mutate_index][1]
                 mutate_index+=1
-            children = self.utils.create_children(self.population,num_mutate)
         return returned_population.fronts[0]

@@ -10,7 +10,7 @@ import numpy as np
 from Class_define_ESNSGA import myProblem
 from Class_define_ESNSGA import myEvolution
 #%%
-path = 'C:\\Users\\acanlab\\Desktop\\sihan\\nsga\\MO-G-FJSP_P1.txt'
+path = 'C:\\Users\\acanlab\\Desktop\\sihan\\nsga\\nsga2_data\\MO-G-FJSP_P1.fjs'
 f = open(path, 'r')
 line_cnt=0
 index_of_map=0
@@ -31,13 +31,13 @@ for line in f:
         obj_matrix=[]
     elif line_cnt==1: #load job cnt
         job_cnt = [int(d) for d in line_split]
-    elif line_cnt>=2 and line_cnt<7: # load objective (total n_machine lines)
+    elif line_cnt>=2 and line_cnt<2+N_machines: # load objective (total n_machine lines)
         tmp = []*5
         tmp = [int(d) for d in line_split]
         obj_matrix.append(tmp)
-    elif line_cnt>=7 and line_cnt<7+N_machines: #load machine distance
+    elif line_cnt>=2+N_machines and line_cnt<2+N_machines+N_machines: #load machine distance
         #print(cnt)
-        machine_distance[line_cnt-7] = [int(d) for d in line_split]
+        machine_distance[line_cnt-2-N_machines] = [int(d) for d in line_split]
     else:
         index_of_line_split = 0
         #Get numbers of operation of each job
@@ -45,7 +45,7 @@ for line in f:
         index_of_line_split +=1
         total_operation+=N_operations
         for i in range(N_operations):
-            operation_arr.append([i,line_cnt-7]) #add to operation list for computing objective
+            operation_arr.append([i,line_cnt-2-N_machines-N_machines]) #add to operation list for computing objective
             N_nums = int(line_split[index_of_line_split])
             tmp = [10000 for _ in range(N_machines)]
             for j in range(N_nums):   
@@ -115,10 +115,12 @@ def Calculate(Gene):
                 if total_time < minima:
                     minima = total_time
                     mini_index = i
+            # time = job_machine_operation_map[job_index][0][mini_index]*batch_size_per_job[job_index][batch_index]
             operation_end_time[mini_index] = minima
             machine_end_time[mini_index] = minima
             last_machine_operate[job_index][batch_index] = mini_index
-            
+            # plt.barh(mini_index,time,left=machine_end_time[mini_index],color=c)
+            # plt.text(machine_end_time[mini_index]+time/4,mini_index,'J'+str(job_index)+'o'+str(0),color='white')
             
             operation_processing[job_index][batch_index] = 1
             transfer_time += obj_matrix[mini_index][0]
@@ -135,14 +137,16 @@ def Calculate(Gene):
                 if time!= 10000:
                     machine_time = time + machine_end_time[i]
                     op_time = time + operate_time
-                    total_time = min(machine_time,op_time)
+                    total_time = max(machine_time,op_time)
                     if total_time < minima:
                         minima = total_time
                         mini_index = i
+            #time = job_machine_operation_map[job_index][op][mini_index]*batch_size_per_job[job_index][batch_index]
             operation_end_time[mini_index] = minima
             machine_end_time[mini_index] = minima
             last_machine_operate[job_index][batch_index] = mini_index
-            
+            # plt.barh(mini_index,time,left=minima-time,color=c)
+            # plt.text(minima-time+time/4,mini_index,'J'+str(job_index)+'o'+str(operation_processing[job_index][batch_index]),color='white')
             operation_processing[job_index][batch_index] += 1
             transportation_time += machine_distance[last_machine][mini_index]
             if last_machine!=mini_index:
@@ -152,60 +156,78 @@ def Calculate(Gene):
             
     makespan = max(machine_end_time)
     return makespan, transfer_time, transportation_time, energy
-def makespan(Gene):
+def Makespan(Gene):
     makespan, transfer_time, transportation_time, energy = Calculate(Gene)
     return makespan
-def transfer_time(Gene):
+def Transfer_time(Gene):
     makespan, transfer_time, transportation_time, energy = Calculate(Gene)
     return transfer_time
-def transportation_time(Gene):
+def Transportation_time(Gene):
     makespan, transfer_time, transportation_time, energy = Calculate(Gene)
     return transportation_time
-def energy(Gene):
+def Energy(Gene):
     makespan, transfer_time, transportation_time, energy = Calculate(Gene)
     return energy
 def plot_gantt(feature):
-    MGen=feature[0]
-    OGen=feature[1]
-    job_nums = N_jobs
-    operation_nums = len(MGen)
-    machine_nums = N_machines #Global variable for number of machines
+    job_batch, batch_size, schedule, batch_size_per_job,operation_processing ,last_machine_operate = split_Gene(feature)
+    machine_nums = N_machines # global variable machine count
+    job_nums = N_jobs #global variable job count
     operation_end_time = [0]*machine_nums # store the end time of last operation in each job
     machine_end_time = [0]*machine_nums # store last operation end time of each machine
-    last_machine_operate = [-1]*job_nums
+    transportation_time = 0
     transfer_time = 0
-    for i in range(len(MGen)):
-        arg_index = np.argsort(OGen)
-        operation_index = operation_arr[arg_index[i]][0]
-        job_index = operation_arr[arg_index[i]][1]
-        machine_index = MGen[arg_index[i]]
-        span = job_machine_operation_map[job_index][operation_index][machine_index]
-
+    energy = 0
+    for operation in schedule:
+       
+        job_index = operation[0]
+        batch_index = operation[1]-1
         c = color[job_index]
-        if operation_index == 0:
-            plt.barh(machine_index,span,left=machine_end_time[machine_index],color=c)
-            plt.text(machine_end_time[machine_index]+span/4,machine_index,'J'+str(job_index)+'o'+str(operation_index),color='white')
-            machine_end_time[machine_index] += span
-            operation_end_time[machine_index] = machine_end_time[machine_index]
-            last_machine_operate[job_index] = machine_index
+        if last_machine_operate[job_index][batch_index] == -1: #each job for the first operation
+            minima = 1000000
+            mini_index = -1
+            for i in range(machine_nums):
+                time = job_machine_operation_map[job_index][0][i]*batch_size_per_job[job_index][batch_index]
+                total_time = time + machine_end_time[i]
+                if total_time < minima:
+                    minima = total_time
+                    mini_index = i
+            time = job_machine_operation_map[job_index][0][mini_index]*batch_size_per_job[job_index][batch_index]
+            operation_end_time[mini_index] = minima
+            machine_end_time[mini_index] = minima
+            last_machine_operate[job_index][batch_index] = mini_index
+            plt.barh(mini_index,time,left=machine_end_time[mini_index],color=c)
+            plt.text(machine_end_time[mini_index]+time/4,mini_index,'J'+str(job_index)+'o'+str(0),color='white')
+            
+            operation_processing[job_index][batch_index] = 1
+            transfer_time += obj_matrix[mini_index][0]
+            energy += (obj_matrix[mini_index][3]*minima + obj_matrix[mini_index][4])
         else:
-            last_machine_index = last_machine_operate[job_index]
-            # print(last_machine_index)
-            operation_end = operation_end_time[last_machine_index]
-            machine_end = machine_end_time[machine_index]
-            transfer_time += machine_distance[last_machine_index][machine_index]
-            if operation_end > machine_end:
-                plt.barh(machine_index,span,left=operation_end,color=c)
-                plt.text(operation_end+span/4,machine_index,'J'+str(job_index)+'o'+str(operation_index),color='white')
-                machine_end_time[machine_index] = operation_end + span
-                operation_end_time[machine_index] = machine_end_time[machine_index]
-                last_machine_operate[job_index] = machine_index
-            else:
-                plt.barh(machine_index,span,left=machine_end_time[machine_index],color=c)
-                plt.text(machine_end_time[machine_index]+span/4,machine_index,'J'+str(job_index)+'o'+str(operation_index),color='white')
-                machine_end_time[machine_index] += span
-                operation_end_time[machine_index] = machine_end_time[machine_index]
-                last_machine_operate[job_index] = machine_index
+            minima = 1000000
+            mini_index = -1
+            
+            op = operation_processing[job_index][batch_index]
+            last_machine = last_machine_operate[job_index][batch_index]
+            operate_time = operation_end_time[last_machine]
+            for i in range(machine_nums):
+                time = job_machine_operation_map[job_index][op][i]*batch_size_per_job[job_index][batch_index]
+                if time!= 10000:
+                    machine_time = time + machine_end_time[i]
+                    op_time = time + operate_time
+                    total_time = max(machine_time,op_time)
+                    if total_time < minima:
+                        minima = total_time
+                        mini_index = i
+            time = job_machine_operation_map[job_index][op][mini_index]*batch_size_per_job[job_index][batch_index]
+            operation_end_time[mini_index] = minima
+            machine_end_time[mini_index] = minima
+            last_machine_operate[job_index][batch_index] = mini_index
+            plt.barh(mini_index,time,left=minima-time,color=c)
+            plt.text(minima-time+time/4,mini_index,'J'+str(job_index)+'o'+str(operation_processing[job_index][batch_index]),color='white')
+            operation_processing[job_index][batch_index] += 1
+            transportation_time += machine_distance[last_machine][mini_index]
+            if last_machine!=mini_index:
+                transfer_time += (obj_matrix[last_machine][1]+obj_matrix[mini_index][0])
+            energy += obj_matrix[mini_index][3]*minima
     plt.show()
 #%%
 if __name__ == '__main__' :
@@ -214,9 +236,10 @@ if __name__ == '__main__' :
     for i in range(len(job_machine_operation_map)):
         operation_num_per_jobs.append(len(job_machine_operation_map[i])) 
     variable = []
+    job_cnt = [1]*N_jobs
     variable.append(job_cnt)
     variable.append(operation_num_per_jobs)
-    fittness = [makespan, transfer_time, transportation_time, energy]
+    fittness = [Makespan, Transfer_time]
     problem = myProblem(num_of_variables=1, 
                       objectives=fittness, 
                       variables_range=variable,
@@ -226,9 +249,8 @@ if __name__ == '__main__' :
     individual_2 = problem.generate_individual()
     problem.calculate_objectives(individual_1)
     problem.calculate_objectives(individual_2)
-    
-    print("Evolutioin......")
-    evo = myEvolution(problem, num_of_generations=200, num_of_individuals=1000)
+    print("Evolutioin......") 
+    evo = myEvolution(problem, num_of_generations=1000, num_of_individuals=1000, mutation_schedule=[[0,100],[100,50],[200,20],[300,10],[400,5],[500,3]])
     evol = evo.evolve()
     func=[]
     feature=[]
@@ -237,8 +259,8 @@ if __name__ == '__main__' :
         feature.append(evol[i].features)
     function1 = [i[0] for i in func]
     function2 = [i[1] for i in func]
-    function3 = [i[2] for i in func]
-    function4 = [i[3] for i in func]
+    # function3 = [i[2] for i in func]
+    # function4 = [i[3] for i in func]
     plt.xlabel('maxspan', fontsize=15)
     plt.ylabel('transfer_time', fontsize=15)
     plt.scatter(function1, function2)
@@ -246,5 +268,6 @@ if __name__ == '__main__' :
 
     print("End......")
 #%% testing
-    a, b ,c, d = Calculate(individual_1.features[0])
-    test = [f(*individual_1.features) for f in fittness]
+    # a, b ,c, d, e, f = split_Gene(individual_1.features[0])
+    # test = [f(*individual_1.features) for f in fittness]
+    plot_gantt(feature[-1][0])
