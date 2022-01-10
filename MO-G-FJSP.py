@@ -78,25 +78,28 @@ def split_Gene(Gene):
     batch_size_per_job=[]*len(job_batch)
     operation_processing=[]*len(job_batch)
     last_machine_operate=[]*len(job_batch)
+    last_operate_end_time=[]*len(job_batch)
     for job_cnt_tmp in job_batch:
         batch_set = []
         tmp_set1 = []
         tmp_set2 = []
+        tmp_set3 = []
         for i in range(cnt1,job_cnt_tmp+cnt1):
             batch_set.append(batch_size[i])
             tmp_set1.append(-1)
             tmp_set2.append(-1)
+            tmp_set3.append(-1)
         batch_size_per_job.append(batch_set)
         operation_processing.append(tmp_set1)
         last_machine_operate.append(tmp_set2)
+        last_operate_end_time.append(tmp_set3)
         cnt1+=job_cnt_tmp
     
-    return job_batch, batch_size, schedule, batch_size_per_job, operation_processing, last_machine_operate
+    return job_batch, batch_size, schedule, batch_size_per_job, operation_processing, last_machine_operate, last_operate_end_time
 def Calculate(Gene):
-    job_batch, batch_size, schedule, batch_size_per_job,operation_processing ,last_machine_operate = split_Gene(Gene)
+    job_batch, batch_size, schedule, batch_size_per_job,operation_processing ,last_machine_operate, last_operate_end_time = split_Gene(Gene)
     machine_nums = N_machines # global variable machine count
     job_nums = N_jobs #global variable job count
-    operation_end_time = [0]*machine_nums # store the end time of last operation in each job
     machine_end_time = [0]*machine_nums # store last operation end time of each machine
     transportation_time = 0
     transfer_time = 0
@@ -116,7 +119,7 @@ def Calculate(Gene):
                     minima = total_time
                     mini_index = i
             # time = job_machine_operation_map[job_index][0][mini_index]*batch_size_per_job[job_index][batch_index]
-            operation_end_time[mini_index] = minima
+            last_operate_end_time[job_index][batch_index] = minima
             machine_end_time[mini_index] = minima
             last_machine_operate[job_index][batch_index] = mini_index
             # plt.barh(mini_index,time,left=machine_end_time[mini_index],color=c)
@@ -131,7 +134,7 @@ def Calculate(Gene):
             
             op = operation_processing[job_index][batch_index]
             last_machine = last_machine_operate[job_index][batch_index]
-            operate_time = operation_end_time[last_machine]
+            operate_time = last_operate_end_time[job_index][batch_index]
             for i in range(machine_nums):
                 time = job_machine_operation_map[job_index][op][i]*batch_size_per_job[job_index][batch_index]
                 if time!= 10000:
@@ -142,7 +145,7 @@ def Calculate(Gene):
                         minima = total_time
                         mini_index = i
             #time = job_machine_operation_map[job_index][op][mini_index]*batch_size_per_job[job_index][batch_index]
-            operation_end_time[mini_index] = minima
+            last_operate_end_time[job_index][batch_index] = minima
             machine_end_time[mini_index] = minima
             last_machine_operate[job_index][batch_index] = mini_index
             # plt.barh(mini_index,time,left=minima-time,color=c)
@@ -169,10 +172,9 @@ def Energy(Gene):
     makespan, transfer_time, transportation_time, energy = Calculate(Gene)
     return energy
 def plot_gantt(feature):
-    job_batch, batch_size, schedule, batch_size_per_job,operation_processing ,last_machine_operate = split_Gene(feature)
+    job_batch, batch_size, schedule, batch_size_per_job,operation_processing ,last_machine_operate, last_operate_end_time = split_Gene(feature)
     machine_nums = N_machines # global variable machine count
     job_nums = N_jobs #global variable job count
-    operation_end_time = [0]*machine_nums # store the end time of last operation in each job
     machine_end_time = [0]*machine_nums # store last operation end time of each machine
     transportation_time = 0
     transfer_time = 0
@@ -192,10 +194,10 @@ def plot_gantt(feature):
                     minima = total_time
                     mini_index = i
             time = job_machine_operation_map[job_index][0][mini_index]*batch_size_per_job[job_index][batch_index]
-            operation_end_time[mini_index] = minima
+            last_operate_end_time[job_index][batch_index] = minima
             machine_end_time[mini_index] = minima
             last_machine_operate[job_index][batch_index] = mini_index
-            plt.barh(mini_index,time,left=machine_end_time[mini_index],color=c)
+            plt.barh(mini_index,time,left=machine_end_time[mini_index]-time,color=c)
             plt.text(machine_end_time[mini_index]+time/4,mini_index,'J'+str(job_index)+'o'+str(0),color='white')
             
             operation_processing[job_index][batch_index] = 1
@@ -207,18 +209,17 @@ def plot_gantt(feature):
             
             op = operation_processing[job_index][batch_index]
             last_machine = last_machine_operate[job_index][batch_index]
-            operate_time = operation_end_time[last_machine]
+            operate_time = last_operate_end_time[job_index][batch_index]
             for i in range(machine_nums):
                 time = job_machine_operation_map[job_index][op][i]*batch_size_per_job[job_index][batch_index]
-                if time!= 10000:
-                    machine_time = time + machine_end_time[i]
-                    op_time = time + operate_time
-                    total_time = max(machine_time,op_time)
-                    if total_time < minima:
-                        minima = total_time
-                        mini_index = i
+                machine_time = time + machine_end_time[i]
+                op_time = time + operate_time
+                total_time = max(machine_time,op_time)
+                if total_time < minima:
+                    minima = total_time
+                    mini_index = i
             time = job_machine_operation_map[job_index][op][mini_index]*batch_size_per_job[job_index][batch_index]
-            operation_end_time[mini_index] = minima
+            last_operate_end_time[job_index][batch_index] = minima
             machine_end_time[mini_index] = minima
             last_machine_operate[job_index][batch_index] = mini_index
             plt.barh(mini_index,time,left=minima-time,color=c)

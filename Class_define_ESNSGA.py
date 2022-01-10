@@ -166,7 +166,7 @@ class myUtils(NSGA2Utils):
                         temp.append(other_individual)
             i = i+1
             population.fronts.append(temp)
-        print("poplen : "+str(len(population)))
+        # print("poplen : "+str(len(population)))
     def __mutate(self, population, num_mutate):
         half_population = int(len(population)/2)
         front_num = 0
@@ -258,8 +258,8 @@ class myEvolution(Evolution):
             children = self.utils.create_children(self.population,num_mutate)
             self.population.extend(children)
             self.utils.fast_nondominated_sort(self.population)
-            for tmptest in self.population.fronts:
-                print(len(tmptest))
+            # for tmptest in self.population.fronts:
+            #     print(len(tmptest))
             new_population = Population()
             front_num = 0
             # print(self.population.fronts)
