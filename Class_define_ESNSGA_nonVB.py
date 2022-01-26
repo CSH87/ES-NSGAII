@@ -13,6 +13,7 @@ import numpy as np
 from nsga2.individual import Individual
 from nsga2.population import Population
 import copy
+import queue
 #%%
 class myIndividual(Individual):
     def __init__(self):
@@ -36,10 +37,11 @@ class myIndividual(Individual):
         return (and_condition and or_condition)
 #%%
 class myProblem(Problem):
-    def __init__(self, objectives, num_of_variables, variables_range, operation_num_per_jobs, job_machine_operation_map, expand=True, same_range=False):
+    def __init__(self, objectives, num_of_variables, variables_range, operation_num_per_jobs, job_machine_operation_map, objective_obj, expand=True, same_range=False):
         super(myProblem,self).__init__(objectives, num_of_variables, variables_range, expand, same_range)
         self.operation_num_per_jobs = operation_num_per_jobs
         self.job_machine_operation_map = job_machine_operation_map
+        self.objective_obj = objective_obj
         if same_range:
             for _ in range(num_of_variables):
                 self.variables_range.append(variables_range[0])
@@ -168,6 +170,126 @@ class myUtils(NSGA2Utils):
         children.extend(child_reseeding_set)
         
         return children
+    def __mutate(self, population, num_mutate):
+        half_population = int(len(population)/2)
+        front_num = 0
+        children = Population()
+        mutate_population = copy.deepcopy(population)
+        # select half best individual
+        while len(children) < half_population:
+            if len(children)+len(mutate_population.fronts[front_num]) <= half_population:
+                children.extend(mutate_population.fronts[front_num])
+            else:
+                children.extend(mutate_population.fronts[front_num][0:half_population-len(children)])
+            front_num += 1
+        half_population = int(self.num_of_individuals/2)
+        while len(children) < half_population:
+            children.append(mutate_population.fronts[0][0])
+        # mutate half best individual
+        for individual in children:
+            cnt_mutate = 0
+            #print(individual)
+            operation_index = len(individual.features[0][-2])-1
+            while cnt_mutate < num_mutate :
+                index1 = random.randint(0,operation_index)
+                index2 = random.randint(0,operation_index)
+                  
+                if individual.features[0][-2][index1]!=individual.features[0][-2][index2]:
+                    tmp = individual.features[0][-2][index1]
+                    individual.features[0][-2][index1] = individual.features[0][-2][index2]
+                    individual.features[0][-2][index2] = tmp
+                    cnt_mutate+=1
+            makespan, transfer_time, transportation_time, energy, makespan_index, schedule_results, schedule_results_v2 = self.problem.objective_obj.Calculate(*individual.features)
+            threshold = random.random()
+            if threshold < 0.5 :
+                cnt_machine = self.problem.variables_range[2]
+                for batch in range(len(individual.features[0][-1])):
+                    for job in range(len(individual.features[0][-1][batch])):
+                        for operation in range(len(individual.features[0][-1][batch][job])):
+                            if individual.features[0][-1][batch][job][operation] == makespan_index:
+                                machine_nums = len(cnt_machine[job][operation])
+                                machine_index = random.randint(0,machine_nums-1)
+                                individual.features[0][-1][batch][job][operation] = cnt_machine[job][operation][machine_index]
+            else:
+                for batch in range(len(individual.features[0][-1])):
+                    for job in range(len(individual.features[0][-1][batch])):
+                        operate_size = len(individual.features[0][-1][batch][job])
+                        mutate_flag = 0
+                        
+                        while mutate_flag<=num_mutate:
+                            operate_index = random.randint(0,operate_size-1)
+                            cnt_machine=[]
+                            for i in range(len(self.problem.job_machine_operation_map[0][0])):
+                                if self.problem.job_machine_operation_map[job][operate_index][i]<10000:
+                                    cnt_machine.append(i)
+                            if len(cnt_machine)==1:
+                                continue
+                            else:
+                                cnt_machine_size = len(cnt_machine)
+                                machine_index = random.randint(0,cnt_machine_size-1)
+                            if machine_index != individual.features[0][-1][batch][job][operate_index]:
+                                individual.features[0][-1][batch][job][operate_index] = cnt_machine[machine_index]
+                                mutate_flag += 1
+        return children
+    def __reseeding(self, population):
+        half_population = int(self.num_of_individuals/2) # reseed half of initial population 
+        children = Population()
+        for _ in range(half_population):
+            individual = self.problem.generate_individual()
+            children.append(individual)
+        return children
+    """
+    def tabu_search(self,individual):
+        tabu_list_len = 5
+        tabu_list = queue.Queue(maxsize = tabu_list_len)
+        best_individual = individual
+        neighbor_searched = individual
+        best_neighbor = [individual]
+        iteration = 20
+        for i in range(iteration):
+            neighbor_searched = self.tabu_search_iteration(neighbor_searched,
+                                                           best_individual,
+                                                           best_neighbor,tabu_list)
+            best_neighbor = [neighbor_searched]
+        individual = best_individual
+        
+        
+    def tabu_search_iteration(self,individual,best_individual,best_neighbor,tabu_list):
+        machine_schedule = individual.features[0][-1]
+        cnt_machine = self.problem.variables_range[2]
+        for batch in range(len(machine_schedule)):
+            for job in range(len(machine_schedule[batch]):
+                for operation in range(len(machine_schedule[batch][job])):
+                    machine_nums = len(cnt_machine[job][operation])
+                    machine_index = random.randint(0,machine_nums-1)
+                    tmp_individual = copy.deepcopy(individual)
+                    tmp_individual.features[0][-1][batch][job][operation] = cnt_machine[job][operation][machine_index] #create one neighbor
+                    self.problem.calculate_objectives(tmp_individual)
+                    if tmp_individual.dominates(best_neighbor):
+                        best_neighbor.append(tmp_individual)
+        check_tabu_list = False
+        index = -1
+        while check_tabu_list:
+            if best_neighbor[index].dominates(best_individual):
+                best_individual = copy.deepcoy(best_neighbor[index])
+                in_tabu_list = any(best_individual in item for item in tabu_list.queue)
+                if not in_tabu_list:
+                    if tabu_list.full():
+                        tabu_list.get()
+                    tabu_list.put(best_individual)
+                check_tabu_list=True
+            else:
+                in_tabu_list = any(best_neighbor[index] in item for item in tabu_list.queue)
+                if not in_tabu_list:
+                    if tabu_list.full():
+                        tabu_list.get()
+                    tabu_list.put(best_neighbor[index])
+                    check_tabu_list=True
+                    #any((1, 1) in item for item in q.queue)
+                else:
+                    index-=1
+        return best_neighbor[index]
+        """
     def fast_nondominated_sort(self, population):
         population.fronts = [[]]
         for individual in population:
@@ -193,54 +315,6 @@ class myUtils(NSGA2Utils):
             i = i+1
             population.fronts.append(temp)
         # print("poplen : "+str(len(population)))
-    def __mutate(self, population, num_mutate):
-        half_population = int(len(population)/2)
-        front_num = 0
-        children = Population()
-        mutate_population = copy.deepcopy(population)
-        # select half best individual
-        while len(children) < half_population:
-            if len(children)+len(mutate_population.fronts[front_num]) <= half_population:
-                children.extend(mutate_population.fronts[front_num])
-            else:
-                children.extend(mutate_population.fronts[front_num][0:half_population-len(children)])
-            front_num += 1
-        half_population = int(self.num_of_individuals/2)
-        while len(children) < half_population:
-            children.append(mutate_population.fronts[0][0])
-        # mutate half best individual
-        for individual in children:
-            cnt_mutate = 0
-            #print(individual)
-            operation_index = len(individual.features[0][-2])-1
-            while cnt_mutate < num_mutate :
-                index1 = random.randint(0,operation_index)
-                index2 = random.randint(0,operation_index)
-                if individual.features[0][-2][index1]!=individual.features[0][-2][index2]:
-                    tmp = individual.features[0][-2][index1]
-                    individual.features[0][-2][index1] = individual.features[0][-2][index2]
-                    individual.features[0][-2][index2] = tmp
-                cnt_mutate+=1
-            
-            mutate_flag = 0
-            new = [self.problem.generate_machine_schedule(len(self.problem.variables_range[0]))]
-            for batch in range(len(individual.features[0][-1])):
-                for job in range(len(individual.features[0][-1][batch])):
-                    for operation in range(len(individual.features[0][-1][batch][job])):
-                        if individual.features[0][-1][batch][job][operation] != new[batch][job][operation]:
-                            individual.features[0][-1][batch][job][operation] = new[batch][job][operation]
-                            mutate_flag = 1
-                            break
-                    if mutate_flag == 1 :
-                        break
-        return children
-    def __reseeding(self, population):
-        half_population = int(self.num_of_individuals/2) # reseed half of initial population 
-        children = Population()
-        for _ in range(half_population):
-            individual = self.problem.generate_individual()
-            children.append(individual)
-        return children
     def __tournament(self, population):
         participants = random.sample(population.population, self.num_of_tour_particips)
         best = None
@@ -317,3 +391,254 @@ class myEvolution(Evolution):
                 num_mutate = self.mutation_schedule[mutate_index][1]
                 mutate_index+=1
         return returned_population.fronts[0]
+class objective_calculation:
+    def __init__(self, job_cnt, machine_cnt, job_machine_operation_map, obj_matrix, machine_distance,color):
+        self.job_cnt = job_cnt
+        self.machine_cnt = machine_cnt
+        self.job_machine_operation_map = job_machine_operation_map
+        self.obj_matrix = obj_matrix
+        self.machine_distance = machine_distance
+        self.color = color
+    def split_Gene(self,Gene):
+        job_batch = []
+        tmp_batch_size = []
+        cnt = 0
+        #print(Gene)
+        while cnt < len(Gene):
+            if cnt==0:
+                for i in range(len(self.job_cnt)): # job_cnt global variable
+                    job_batch.append(Gene[cnt])
+                    cnt+=1
+            tmp_batch_size.append(Gene[cnt])
+            cnt+=1
+        batch_size = tmp_batch_size[:-2]
+        schedule = tmp_batch_size[-2]
+        machine_schedule = tmp_batch_size[-1]
+        cnt1=0
+        batch_size_per_job=[]*len(job_batch)
+        operation_processing=[]*len(job_batch)
+        last_machine_operate=[]*len(job_batch)
+        last_operate_end_time=[]*len(job_batch)
+        for job_cnt_tmp in job_batch:
+            batch_set = []
+            tmp_set1 = []
+            tmp_set2 = []
+            tmp_set3 = []
+            for i in range(cnt1,job_cnt_tmp+cnt1):
+                batch_set.append(batch_size[i])
+                tmp_set1.append(-1)
+                tmp_set2.append(-1)
+                tmp_set3.append(0)
+            batch_size_per_job.append(batch_set)
+            operation_processing.append(tmp_set1)
+            last_machine_operate.append(tmp_set2)
+            last_operate_end_time.append(tmp_set3)
+            cnt1+=job_cnt_tmp
+        
+        return job_batch, batch_size, schedule, batch_size_per_job, operation_processing, last_machine_operate, last_operate_end_time, machine_schedule
+    def Calculate(self,Gene):
+        job_batch, batch_size, schedule, batch_size_per_job,operation_processing ,last_machine_operate, last_operate_end_time, machine_schedule = self.split_Gene(Gene)
+        machine_nums = self.machine_cnt # global variable machine count
+        # job_nums = N_jobs #global variable job count
+        machine_end_time = [0]*machine_nums # store last operation end time of each machine
+        machine_blank_space = [[0] for _ in range(machine_nums) ]
+        schedule_results = [[] for _ in range(machine_nums)]
+        schedule_results_v2 = copy.deepcopy(machine_schedule)
+        transportation_time = 0
+        transfer_time = 0
+        energy = 0
+        for operation in schedule:
+           
+            job_index = operation[0]
+            batch_index = operation[1]-1
+            if last_machine_operate[job_index][batch_index] == -1: #each job for the first operation
+                machine_schedule_index = machine_schedule[batch_index][job_index][0]    
+                time = self.job_machine_operation_map[job_index][0][machine_schedule_index]*batch_size_per_job[job_index][batch_index]
+                machine_start_time = machine_end_time[machine_schedule_index]
+                machine_end_time[machine_schedule_index] += time
+                last_operate_end_time[job_index][batch_index] = machine_end_time[machine_schedule_index]
+                last_machine_operate[job_index][batch_index] = machine_schedule_index
+                machine_blank_space[machine_schedule_index][0] = machine_end_time[machine_schedule_index]
+
+                schedule_results[machine_schedule_index].append([job_index,
+                                                                 batch_index,
+                                                                 0,machine_start_time,time])
+                schedule_results_v2[batch_index][job_index][0] = [machine_schedule_index,
+                                                                  machine_start_time,time]
+                operation_processing[job_index][batch_index] = 1
+                transfer_time += self.obj_matrix[machine_schedule_index][0]
+                energy += (self.obj_matrix[machine_schedule_index][3]*time + self.obj_matrix[machine_schedule_index][4])
+            else:
+                op = operation_processing[job_index][batch_index]
+                machine_schedule_index = machine_schedule[batch_index][job_index][op]
+                last_machine = last_machine_operate[job_index][batch_index]
+                operate_time = last_operate_end_time[job_index][batch_index]
+                time = self.job_machine_operation_map[job_index][op][machine_schedule_index]*batch_size_per_job[job_index][batch_index]
+                machine_blank_space_size = len(machine_blank_space[machine_schedule_index])
+                find_blank = False
+                for blank_index in range(1,machine_blank_space_size):
+                    blank_start = machine_blank_space[machine_schedule_index][blank_index][0]
+                    blank_end = machine_blank_space[machine_schedule_index][blank_index][1]
+                    blank_size = blank_end-blank_start
+                    if blank_size >= time and blank_start>=operate_time:
+                        find_blank = True
+                        total_time = blank_start + time
+                        machine_blank_space[machine_schedule_index][blank_index][0] = total_time
+                        last_operate_end_time[job_index][batch_index] = total_time
+                        last_machine_operate[job_index][batch_index] =machine_schedule_index
+                        schedule_results[machine_schedule_index].append([job_index,
+                                                                         batch_index,
+                                                                         op,
+                                                                         blank_start,
+                                                                         time])
+                        schedule_results_v2[batch_index][job_index][op] = \
+                            [machine_schedule_index,                                                                         
+                             blank_start,time]
+                        break
+                if not find_blank:
+                    machine_time = time + machine_end_time[machine_schedule_index]
+                    op_time = time + operate_time
+                    total_time = max(machine_time, op_time)
+                    last_operate_end_time[job_index][batch_index] = total_time
+                    machine_end_time[machine_schedule_index] = total_time
+                    last_machine_operate[job_index][batch_index] = machine_schedule_index
+                    if machine_time == total_time:
+                        machine_blank_space[machine_schedule_index][0] = total_time
+                        schedule_results[machine_schedule_index].append([job_index,
+                                                                         batch_index,
+                                                                         op,
+                                                                         machine_time-time,
+                                                                         time])
+                        schedule_results_v2[batch_index][job_index][op] = \
+                            [machine_schedule_index,                                                                         
+                             machine_time-time,time]
+                    else:
+                        machine_blank_space[machine_schedule_index].append([machine_time-time,op_time-time]) 
+                        schedule_results[machine_schedule_index].append([job_index,
+                                                                         batch_index,
+                                                                         op,
+                                                                         op_time-time,
+                                                                         time])
+                        schedule_results_v2[batch_index][job_index][op] = \
+                            [machine_schedule_index,                                                                         
+                             op_time-time,time]
+                            
+                operation_processing[job_index][batch_index] += 1
+                transportation_time += self.machine_distance[last_machine][machine_schedule_index]
+                if last_machine!=machine_schedule_index:
+                    transfer_time += (self.obj_matrix[last_machine][1]+self.obj_matrix[machine_schedule_index][0])
+                energy += self.obj_matrix[machine_schedule_index][3]*total_time
+                
+                
+        makespan = max(machine_end_time)
+        makespan_index = np.argmax(machine_end_time)
+        for machine in schedule_results:
+            machine.sort(key = lambda x:x[3])
+        return makespan, transfer_time, transportation_time, energy, makespan_index, schedule_results, schedule_results_v2
+    def Makespan(self,Gene):
+        makespan, transfer_time, transportation_time, energy, makespan_index, schedule_results, schedule_results_v2 = self.Calculate(Gene)
+        return makespan
+    def Transfer_time(self,Gene):
+        makespan, transfer_time, transportation_time, energy, makespan_index, schedule_results, schedule_results_v2 = self.Calculate(Gene)
+        return transfer_time
+    def Transportation_time(self,Gene):
+        makespan, transfer_time, transportation_time, energy, makespan_index, schedule_results, schedule_results_v2 = self.Calculate(Gene)
+        return transportation_time
+    def Energy(self,Gene):
+        makespan, transfer_time, transportation_time, energy, makespan_index, schedule_results, schedule_results_v2 = self.Calculate(Gene)
+        return energy
+    def plot_gantt(self,feature):
+        job_batch, batch_size, schedule, batch_size_per_job,operation_processing ,last_machine_operate, last_operate_end_time, machine_schedule = self.split_Gene(feature)
+        machine_nums = self.machine_cnt # global variable machine count
+        # job_nums = N_jobs #global variable job count
+        machine_end_time = [0]*machine_nums # store last operation end time of each machine
+        machine_blank_space = [[0] for _ in range(machine_nums) ]
+        transportation_time = 0
+        transfer_time = 0
+        energy = 0
+        for operation in schedule:
+           
+            job_index = operation[0]
+            batch_index = operation[1]-1
+            c = self.color[job_index]
+            if last_machine_operate[job_index][batch_index] == -1: #each job for the first operation
+                machine_schedule_index = machine_schedule[batch_index][job_index][0]    
+                time = self.job_machine_operation_map[job_index][0][machine_schedule_index]*batch_size_per_job[job_index][batch_index] 
+                machine_end_time[machine_schedule_index] += time
+                last_operate_end_time[job_index][batch_index] = machine_end_time[machine_schedule_index]
+                last_machine_operate[job_index][batch_index] = machine_schedule_index
+                machine_blank_space[machine_schedule_index][0] = machine_end_time[machine_schedule_index]
+                plt.barh(machine_schedule_index,time,left=machine_end_time[machine_schedule_index]-time,color=c)
+                plt.text(time/4,machine_schedule_index,'J'+str(job_index)+'o'+str(0),color='white')
+                
+                operation_processing[job_index][batch_index] = 1
+                transfer_time += self.obj_matrix[machine_schedule_index][0]
+                energy += (self.obj_matrix[machine_schedule_index][3]*time + self.obj_matrix[machine_schedule_index][4])
+            else:
+                op = operation_processing[job_index][batch_index]
+                machine_schedule_index = machine_schedule[batch_index][job_index][op]
+                last_machine = last_machine_operate[job_index][batch_index]
+                operate_time = last_operate_end_time[job_index][batch_index]
+                time = self.job_machine_operation_map[job_index][op][machine_schedule_index]*batch_size_per_job[job_index][batch_index]
+                
+                machine_blank_space_size = len(machine_blank_space[machine_schedule_index])
+                find_blank = False
+                for blank_index in range(1,machine_blank_space_size):
+                    blank_start = machine_blank_space[machine_schedule_index][blank_index][0]
+                    blank_end = machine_blank_space[machine_schedule_index][blank_index][1]
+                    blank_size = blank_end-blank_start
+                    if blank_size >= time and blank_start>=operate_time:
+                        find_blank = True
+                        total_time = machine_blank_space[machine_schedule_index][blank_index][0] + time
+                        machine_blank_space[machine_schedule_index][blank_index][0] = total_time
+                        last_operate_end_time[job_index][batch_index] = total_time
+                        last_machine_operate[job_index][batch_index] =machine_schedule_index
+                        plt.barh(machine_schedule_index,time,left=blank_start,color=c)
+                        plt.text(total_time-time+time/4,machine_schedule_index,'J'+str(job_index)+'o'+str(operation_processing[job_index][batch_index]),color='white')
+                        break
+                if not find_blank:
+                    machine_time = time + machine_end_time[machine_schedule_index]
+                    op_time = time + operate_time
+                    total_time = max(machine_time, op_time)
+                    last_operate_end_time[job_index][batch_index] = total_time
+                    machine_end_time[machine_schedule_index] = total_time
+                    last_machine_operate[job_index][batch_index] = machine_schedule_index
+                    if machine_time == total_time:
+                        machine_blank_space[machine_schedule_index][0] = total_time
+                    else:
+                        machine_blank_space[machine_schedule_index].append([machine_time-time,op_time-time])
+                    plt.barh(machine_schedule_index,time,left=total_time-time,color=c)
+                    plt.text(total_time-time+time/4,machine_schedule_index,'J'+str(job_index)+'o'+str(operation_processing[job_index][batch_index]),color='white')
+                
+                operation_processing[job_index][batch_index] += 1
+                transportation_time += self.machine_distance[last_machine][machine_schedule_index]
+                if last_machine!=machine_schedule_index:
+                    transfer_time += (self.obj_matrix[last_machine][1]+self.obj_matrix[machine_schedule_index][0])
+                energy += self.obj_matrix[machine_schedule_index][3]*total_time
+        plt.show()
+    def check_schedule(self,schedule_results):
+        for machine in schedule_results:
+            for machine_schedule_index1 in range(len(machine)):
+                for machine_schedule_index2 in range(machine_schedule_index1+1,len(machine)):
+                    start_time1 = machine[machine_schedule_index1][3]
+                    time1 = machine[machine_schedule_index1][4]
+                    start_time2 = machine[machine_schedule_index2][3]
+                    if start_time1 + time1 > start_time2:
+                        print("index1: " + str(machine_schedule_index1))
+                        print("index2: " + str(machine_schedule_index2))
+                        print("False")
+                        return 
+    def check_schedule2(self,schedule_results_v2):
+        for batch in schedule_results_v2:
+            for job in batch:
+                for operation_index1 in range(len(job)):
+                    for operation_index2 in range(operation_index1+1,len(job)):
+                        start_time1 = job[operation_index1][1]
+                        time1 = job[operation_index1][2]
+                        start_time2 = job[operation_index2][1]
+                        if start_time1 + time1 > start_time2:
+                            print("index1: " + str(operation_index1))
+                            print("index2: " + str(operation_index2))
+                            print("False")
+                            return 
+        
