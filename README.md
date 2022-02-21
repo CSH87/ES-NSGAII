@@ -8,4 +8,5 @@ Evolution strategy NSGA-II for MO-G-FJSP
 4. Class_define_ESNSGA_nonVB.py -- MO_G_FJSP_nonVB.py (主要執行此版)
 5. Class_define_NSGA_nonVB.py -- MO_G_FJSP_nonVB_NSGA.py
 6. Class_define_ESNSGA_jsp.py -- MO_G_JSP.py
-description.txt描述data資料夾中資料
+
+description.txt為描述data資料夾中資料
