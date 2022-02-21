@@ -8,13 +8,13 @@ import matplotlib.pyplot as plt
 import random
 import numpy as np
 import time
-from Class_define_ESNSGA_nonVB import myProblem
-from Class_define_ESNSGA_nonVB import myEvolution
-from Class_define_ESNSGA_nonVB import objective_calculation
-from Class_define_ESNSGA_nonVB import myUtils
+from Class_define_ESNSGA_jsp import myProblem
+from Class_define_ESNSGA_jsp import myEvolution
+from Class_define_ESNSGA_jsp import objective_calculation
+from Class_define_ESNSGA_jsp import myUtils
 from nsga2.population import Population
 #%%
-path = 'C:\\Users\\acanlab\\Desktop\\sihan\\nsga\\nsga2_data\\MO-G-FJSP_P1.fjs'
+path = 'C:\\Users\\acanlab\\Desktop\\sihan\\nsga\\nsga2_data\\JSP_ft20.fjs'
 f = open(path, 'r')
 line_cnt=0
 index_of_map=0
@@ -33,31 +33,16 @@ for line in f:
         # job_cnt=[]*N_jobs
         machine_distance = [[0]*N_machines]*N_machines
         obj_matrix=[]
-    elif line_cnt==1: #load job cnt
-        job_cnt = [int(d) for d in line_split]
-    elif line_cnt>=2 and line_cnt<2+N_machines: # load objective (total n_machine lines)
-        # tmp = []*5
-        obj_matrix.append([int(d) for d in line_split])
-    elif line_cnt>=2+N_machines and line_cnt<2+N_machines+N_machines: #load machine distance
-        #print(cnt)
-        machine_distance[line_cnt-2-N_machines] = [int(d) for d in line_split]
     else:
-        index_of_line_split = 0
-        #Get numbers of operation of each job
-        N_operations = int(line_split[index_of_line_split]) 
-        index_of_line_split +=1
-        total_operation+=N_operations
-        for i in range(N_operations):
-            # operation_arr.append([i,line_cnt-2-N_machines-N_machines]) #add to operation list for computing objective
-            N_nums = int(line_split[index_of_line_split])
+        cnt_operation=0
+        line_index = 0
+        while line_index < len(line_split):
             tmp = [np.inf for _ in range(N_machines)]
-            for j in range(N_nums):   
-                machine_index = int(line_split[index_of_line_split+1])-1
-                operate_time = int(line_split[index_of_line_split+2])
-                tmp[machine_index] = operate_time
-                index_of_line_split += 2
+            num = int(line_split[line_index])
+            op_time = int(line_split[line_index+1])
+            tmp[num]=op_time
             job_machine_operation_map[index_of_map].append(tmp)
-            index_of_line_split += 1
+            line_index+=2
         index_of_map += 1
     line_cnt+=1
 machine_per_job_operation = []
@@ -219,6 +204,7 @@ def objective_calculation():
 """
 #%%
 if __name__ == '__main__' :
+    
     job_cnt = [1]*N_jobs
     objective = objective_calculation(job_cnt,N_machines,job_machine_operation_map,obj_matrix,
                                       machine_distance,color)
@@ -243,10 +229,11 @@ if __name__ == '__main__' :
 
     print("Evolutioin......") 
     mutation_schedule=[[0,1]]#[[0,120],[100,100],[200,80],[300,60],[400,40],[500,20],[600,10]] ,[1000,10],[2000,8],[3000,6],[4000,4],[5000,2],[6000,1]
-    evo = myEvolution(problem, num_of_generations=500, num_of_individuals=1000, mutation_schedule=mutation_schedule)
+    evo = myEvolution(problem, num_of_generations=5000, num_of_individuals=100, mutation_schedule=mutation_schedule)
     start = time.time()
     evol, evol_makespan = evo.evolve()
     end = time.time()
+    print("time : " + str(end-start))
     func=[]
     feature=[]
     for i in range(len(evol)):

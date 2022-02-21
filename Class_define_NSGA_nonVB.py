@@ -178,14 +178,27 @@ class myUtils(NSGA2Utils):
         child1.features[0][:-1] = copy.deepcopy(individual1.features[0][:-1])
         child2.features[0][:-1] = copy.deepcopy(individual2.features[0][:-1])
         #feature1
-        # feature1_len = len(individual1.features[0][-2])
-        # crossover_point = random.randint(0,feature1_len-1)
-        # job_cnt = len(self.operation_num_per_jobs)
-        # operation_cnt = [0]*job_cnt
-        # child1.features[0][-2][:crossover_point] = copy.deepcopy(individual1.features[0][-2][:crossover_point])
-        # child2.features[0][-2][:crossover_point] = copy.deepcopy(individual2.features[0][-2][:crossover_point])
-        # for i in range(crossover_point, feature1_len):
-        #     operation_index = child1.features[0][-2][i]
+        job_cnt = len(self.problem.operation_num_per_jobs)
+        jobset_1 = random.randint(0,job_cnt-1)
+        feature1_len = len(individual1.features[0][-2])
+        tmp_index1 = 0
+        tmp_index2 = 0
+        for i in range(feature1_len):
+            if individual1.features[0][-2][i][0] == jobset_1:
+                child1.features[0][-2][i] = copy.deepcopy(individual1.features[0][-2][i])
+            else:
+                while individual2.features[0][-2][tmp_index2][0] == jobset_1:
+                    tmp_index2+=1
+                child1.features[0][-2][i] = copy.deepcopy(individual2.features[0][-2][tmp_index2])
+                tmp_index2+=1
+            if individual2.features[0][-2][i][0] == jobset_1:
+                child2.features[0][-2][i] = copy.deepcopy(individual2.features[0][-2][i])
+            else:
+                while individual1.features[0][-2][tmp_index1][0] == jobset_1:
+                    tmp_index1+=1
+                child2.features[0][-2][i] = copy.deepcopy(individual1.features[0][-2][tmp_index1])
+                tmp_index1+=1
+        
         #feature2
         batch_size1 = len(individual1.features[0][-1])
         batch_size2 = len(individual2.features[0][-1])
@@ -202,35 +215,29 @@ class myUtils(NSGA2Utils):
     def __mutate(self, individual, num_mutate):
         cnt_mutate = 0
         #print(individual)
-        # operation_index = len(individual.features[0][-2])-1
-        # while cnt_mutate < 1 :
-        #     index1 = random.randint(0,operation_index)
-        #     index2 = random.randint(0,operation_index)
-
-        #     if individual.features[0][-2][index1]!=individual.features[0][-2][index2]:
-        #         tmp = individual.features[0][-2][index1]
-        #         individual.features[0][-2][index1] = individual.features[0][-2][index2]
-        #         individual.features[0][-2][index2] = tmp
-        #     cnt_mutate+=1
-           
+        cnt_mutate = 0
+        #print(individual)
+        operation_index = len(individual.features[0][-2])-1
+        while cnt_mutate < num_mutate :
+            index1 = random.randint(0,operation_index)
+            index2 = random.randint(0,operation_index)
+              
+            if individual.features[0][-2][index1]!=individual.features[0][-2][index2]:
+                tmp = individual.features[0][-2][index1]
+                individual.features[0][-2][index1] = individual.features[0][-2][index2]
+                individual.features[0][-2][index2] = tmp
+                cnt_mutate+=1
+        cnt_machine = self.problem.variables_range[2]
         for batch in range(len(individual.features[0][-1])):
             for job in range(len(individual.features[0][-1][batch])):
                 operate_size = len(individual.features[0][-1][batch][job])
-                
                 mutate_flag = 0
-                while mutate_flag<1:
+                while mutate_flag<=0:
                     operate_index = random.randint(0,operate_size-1)
-                    cnt_machine=[]
-                    for i in range(len(self.problem.job_machine_operation_map[0][0])):
-                        if self.problem.job_machine_operation_map[job][operate_index][i]<10000:
-                            cnt_machine.append(i)
-                    if len(cnt_machine)==1:
-                        continue
-                    else:
-                        cnt_machine_size = len(cnt_machine)
-                        machine_index = random.randint(0,cnt_machine_size-1)
+                    cnt_machine_size = len(cnt_machine[job][operate_index])
+                    machine_index = random.randint(0,cnt_machine_size-1)
                     if machine_index != individual.features[0][-1][batch][job][operate_index]:
-                        individual.features[0][-1][batch][job][operate_index] = cnt_machine[machine_index]
+                        individual.features[0][-1][batch][job][operate_index] = cnt_machine[job][operate_index][machine_index]
                         mutate_flag += 1
         return individual
     def __reseeding(self, population):
@@ -314,7 +321,7 @@ class myEvolution(Evolution):
             self.utils.calculate_crowding_distance(front)
         num_mutate = self.mutation_schedule[0][1]
         mutate_index = 1
-        
+        min_makespan = np.inf
         returned_population = None
         for i in range(self.num_of_generations):
             print('generation : ' + str(i))
@@ -326,19 +333,29 @@ class myEvolution(Evolution):
             new_population = Population()
             front_num = 0
             # print(self.population.fronts)
+            for individual in self.population:
+                if individual.objectives[0] < min_makespan:
+                    min_makespan = individual.objectives[0]
+                    print('Makespan : ' +str(min_makespan))
             while len(new_population) + len(self.population.fronts[front_num]) <= self.num_of_individuals :
                 self.utils.calculate_crowding_distance(self.population.fronts[front_num])
                 new_population.extend(self.population.fronts[front_num])
                 front_num += 1
             self.utils.calculate_crowding_distance(self.population.fronts[front_num])
             self.population.fronts[front_num].sort(key=lambda individual: individual.crowding_distance, reverse=True)
-            new_population.extend(self.population.fronts[front_num][0:self.num_of_individuals-len(new_population)])
-            returned_population = self.population
-            self.population = new_population
+            
+            if front_num==0:
+                random.shuffle(self.population.fronts[front_num])
+            last = self.num_of_individuals-len(new_population)    
+            # new_population.extend(self.population.fronts[front_num])
+            new_population.extend(self.population.fronts[front_num][:last])
+            returned_population = copy.deepcopy(self.population)
+            self.population = copy.deepcopy(new_population)
             self.utils.fast_nondominated_sort(self.population)
             for front in self.population.fronts:
                 self.utils.calculate_crowding_distance(front)
             if mutate_index < len(self.mutation_schedule) and i == self.mutation_schedule[mutate_index][0]:
                 num_mutate = self.mutation_schedule[mutate_index][1]
                 mutate_index+=1
+            
         return returned_population.fronts[0]

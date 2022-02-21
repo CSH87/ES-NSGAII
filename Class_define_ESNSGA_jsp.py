@@ -161,34 +161,6 @@ class myUtils(NSGA2Utils):
                     cnt_mutate+=1
             makespan, transfer_time, transportation_time, energy, makespan_index, schedule_results, schedule_results_v2 = self.problem.objective_obj.Calculate(*individual.features)
             threshold = random.random()
-            cnt_machine = self.problem.variables_range[2]
-            if threshold < 0 :
-                
-                for batch in range(len(individual.features[0][-1])):
-                    for job in range(len(individual.features[0][-1][batch])):
-                        for operation in range(len(individual.features[0][-1][batch][job])):
-                            if individual.features[0][-1][batch][job][operation] == makespan_index:
-                                threshold = random.random()
-                                if threshold < 0.5 :
-                                    machine_nums = len(cnt_machine[job][operation])
-                                    machine_index = random.randint(0,machine_nums-1)
-                                    individual.features[0][-1][batch][job][operation] = cnt_machine[job][operation][machine_index]
-            else:
-                for batch in range(len(individual.features[0][-1])):
-                    for job in range(len(individual.features[0][-1][batch])):
-                        operate_size = len(individual.features[0][-1][batch][job])
-                        mutate_flag = 0
-                        # mutate_times = operate_size//2
-                        r = random.random()
-                        threshold = 0.5
-                        if r < threshold:
-                        # while mutate_flag<=mutate_times:
-                            operate_index = random.randint(0,operate_size-1)
-                            cnt_machine_size = len(cnt_machine[job][operate_index])
-                            machine_index = random.randint(0,cnt_machine_size-1)
-                            if machine_index != individual.features[0][-1][batch][job][operate_index]:
-                                individual.features[0][-1][batch][job][operate_index] = cnt_machine[job][operate_index][machine_index]
-                                mutate_flag += 1
         return children
     def __reseeding(self, population):
         half_population = int(self.num_of_individuals/2) # reseed half of initial population 
@@ -413,7 +385,7 @@ class myEvolution(Evolution):
             if mutate_index < len(self.mutation_schedule) and i == self.mutation_schedule[mutate_index][0]:
                 num_mutate = self.mutation_schedule[mutate_index][1]
                 mutate_index+=1
-        cnt=0
+        # cnt=0
         # for individual in returned_population.fronts[0]:
         #     print("tabu searching")
         #     print("individual : " + str(cnt))
@@ -558,9 +530,9 @@ class objective_calculation:
             operation_processing[job_index][batch_index] += 1
             if last_machine!=-1:
                 transportation_time += self.machine_distance[last_machine][machine_schedule_index]
-                if last_machine!=machine_schedule_index:
-                    transfer_time += (self.obj_matrix[last_machine][1]+self.obj_matrix[machine_schedule_index][0])
-            energy += self.obj_matrix[machine_schedule_index][3]*total_time
+            #     if last_machine!=machine_schedule_index:
+            #         transfer_time += (self.obj_matrix[last_machine][1]+self.obj_matrix[machine_schedule_index][0])
+            # energy += self.obj_matrix[machine_schedule_index][3]*total_time
             
             
             
